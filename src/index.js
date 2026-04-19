@@ -3,6 +3,8 @@
  * 
  * Phase 1 基础模块导出
  * Phase 2 核心功能模块导出
+ * Phase 3 决策引擎导出
+ * Phase 4 保护与自愈模块导出
  */
 
 const Logger = require('./logger');
@@ -11,6 +13,9 @@ const StateManager = require('./state-manager');
 const Monitor = require('./monitor');
 const Archiver = require('./archiver');
 const Compressor = require('./compressor');
+const Decision = require('./decision');
+const Protector = require('./protector');
+const Healer = require('./healer');
 
 module.exports = {
   // Phase 1 基础模块
@@ -23,6 +28,13 @@ module.exports = {
   Archiver,
   Compressor,
   
+  // Phase 3 决策引擎
+  Decision,
+  
+  // Phase 4 保护与自愈模块
+  Protector,
+  Healer,
+  
   // 版本信息
   version: '1.0.0',
   
@@ -32,5 +44,8 @@ module.exports = {
   createStateManager: (options) => new StateManager(options),
   createMonitor: (options) => new Monitor(options),
   createArchiver: (options) => new Archiver(options),
-  createCompressor: (options) => new Compressor(options)
+  createCompressor: (options) => new Compressor(options),
+  createDecision: (options) => new Decision(options),
+  createProtector: (options) => new Protector(options),
+  createHealer: (options) => new Healer(options)
 };
