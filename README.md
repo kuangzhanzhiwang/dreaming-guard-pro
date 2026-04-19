@@ -1,105 +1,165 @@
-# Dreaming Guard Pro
+# 🛡️ Dreaming Guard Pro
 
-> 防止OpenClaw dreaming文件无限积累导致OOM崩溃的智能保护系统
+> Smart prevention and auto-recovery for OpenClaw dreaming context overflow
 
-## 功能特性
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-green.svg)](https://clawhub.ai)
 
-- **实时监控**: 监控dreaming文件增长趋势
-- **智能归档**: 分级归档策略，保留有价值数据
-- **自动压缩**: 智能降级压缩，减少空间占用
-- **进程保护**: 内存监控，危险时主动干预
-- **崩溃自愈**: 自动检测崩溃并恢复
-- **健康报告**: 可视化状态报告
+## 🎯 Problem
 
-## 安装
+OpenClaw's dreaming mechanism can accumulate context files indefinitely, leading to:
+- 💥 OOM crashes (gateway process consuming all memory)
+- 🐌 Performance degradation
+- 🔄 Unrecoverable sessions
+- 😡 Frustrated users losing work
+
+Official fix (PR#67697) is still pending. This project provides a **complete prevention and recovery solution** today.
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📊 **Real-time Monitoring** | Track file count, size, growth rate, process memory |
+| 🔮 **Trend Prediction** | Forecast when dreaming will overflow based on growth patterns |
+| 🗄️ **Smart Archiving** | 3-tier archival: hot (7d) → warm (30d) → cold (30d+) with gzip compression |
+| 🗜️ **Semantic Compression** | 3-level: lossless (dedup) → lossy (summarize) → aggressive (key info only) |
+| 🛡️ **Process Protection** | Monitor gateway RSS memory, intervene before OOM |
+| 💊 **Crash Self-healing** | Auto-detect crashes, restore from health checkpoints |
+| 📋 **Health Reports** | Regular status reports in text/JSON/markdown |
+| ⚙️ **Configurable** | Custom thresholds, strategies, and notification channels |
+
+## 🚀 Quick Start
+
+### As OpenClaw Skill
 
 ```bash
-cd projects/dreaming-guard-pro
-npm install
+clawhub install dreaming-guard-pro
 ```
 
-## 快速开始
+### Standalone
 
-```javascript
-const { Logger, Config, StateManager } = require('./src');
+```bash
+git clone https://github.com/kuangzhanzhiwang/dreaming-guard-pro.git
+cd dreaming-guard-pro
+npm install  # No external dependencies needed!
 
-// 日志系统
-const logger = new Logger({ level: 'info' });
-logger.info('Starting Dreaming Guard Pro');
+# Run once
+node src/guard.js --once
 
-// 配置管理
-const config = new Config();
-config.load();
-const threshold = config.get('thresholds.warning');
+# Run as daemon
+node src/guard.js --daemon
 
-// 状态管理
-const state = new StateManager();
-await state.load();
-state.setCheckpoint({ lastCheck: Date.now(), status: 'healthy' });
-await state.save();
+# Generate health report
+node src/guard.js --report markdown
 ```
 
-## 模块说明
+### Cron Setup
 
-### Logger (src/logger.js)
-统一日志管理，支持多级别输出和自动轮转。
-
-```javascript
-const logger = new Logger({
-  level: 'debug',           // 日志级别
-  file: '~/.openclaw/logs/dreaming-guard.log',
-  maxSize: 5 * 1024 * 1024  // 5MB自动轮转
-});
-
-logger.debug('Debug message');
-logger.info('Info message');
-logger.warn('Warning message');
-logger.error('Error message');
+```bash
+# Add to crontab (run every minute)
+* * * * * /path/to/dreaming-guard-pro/scripts/dreaming-guard-pro.sh >> /tmp/dreaming-guard.log 2>&1
 ```
 
-### Config (src/config.js)
-配置管理，支持文件配置和环境变量覆盖。
+## 🏗️ Architecture
 
-```javascript
-const config = new Config();
-await config.load();
-
-const threshold = config.get('thresholds.warning');
-config.set('thresholds.critical', 1048576);
-
-// 环境变量覆盖: DREAMING_GUARD_THRESHOLD_WARNING=524288
+```
+┌─────────────────────────────────────────┐
+│              Guard (Main Loop)           │
+│  monitor → analyzer → decision → execute │
+├─────────────────────────────────────────┤
+│  Logger  │  Config  │  StateManager     │  Phase 1
+├─────────────────────────────────────────┤
+│  Monitor │ Archiver │  Compressor       │  Phase 2
+├─────────────────────────────────────────┤
+│  Analyzer │  Decision                   │  Phase 3
+├─────────────────────────────────────────┤
+│  Protector │  Healer                    │  Phase 4
+├─────────────────────────────────────────┤
+│  Reporter │  Guard                      │  Phase 5
+└─────────────────────────────────────────┘
 ```
 
-配置文件位置: `~/.openclaw/dreaming-guard.json`
+**12 modules, ~3000 lines, zero external dependencies.**
 
-### StateManager (src/state-manager.js)
-状态持久化，支持崩溃恢复。
+## 📊 Risk Levels & Actions
 
-```javascript
-const state = new StateManager();
-await state.load();
+| Risk Level | Size Threshold | Memory | Action |
+|-----------|---------------|--------|--------|
+| 🟢 Green | < 50% | < 70% | Monitor only |
+| 🟡 Yellow | 50-75% | 70-85% | Notify + Archive old files |
+| 🔴 Red | 75-90% | 85-95% | Compress + Aggressive archive |
+| ⚫ Emergency | > 90% | > 95% | Emergency cleanup + Gateway restart |
 
-// 保存监控状态
-state.save({
-  monitors: { ... },
-  actions: [ ... ]
-});
+## ⚙️ Configuration
 
-// 检查点管理
-const checkpoint = state.getCheckpoint();
-state.setCheckpoint({ lastCheck: Date.now(), status: 'healthy' });
+Create `~/.openclaw/dreaming-guard.json`:
+
+```json
+{
+  "monitor": {
+    "intervalMs": 60000,
+    "dreamsDir": "~/.openclaw/dreams"
+  },
+  "thresholds": {
+    "warningPercent": 50,
+    "criticalPercent": 75,
+    "emergencyPercent": 90,
+    "memoryWarningPercent": 70,
+    "memoryCriticalPercent": 85
+  },
+  "archiver": {
+    "hotDays": 7,
+    "warmDays": 30,
+    "archiveDir": "~/.openclaw/dreaming-archive"
+  },
+  "compressor": {
+    "defaultStrategy": "lossless"
+  }
+}
 ```
 
-状态文件位置: `~/.openclaw/dreaming-guard-state.json`
+Environment variables (prefixed with `DREAMING_GUARD_`):
 
-## 开发进度
+```bash
+DREAMING_GUARD_MONITOR_INTERVALMS=30000
+DREAMING_GUARD_THRESHOLDS_WARNINGPERCENT=40
+```
 
-- [x] Phase 1: 基础设施 (Logger, Config, StateManager)
-- [ ] Phase 2: 核心功能 (Monitor, Archiver, Compressor)
-- [ ] Phase 3: 智能分析 (Analyzer, Decision)
-- [ ] Phase 4: 保护机制 (Protector, Healer)
-- [ ] Phase 5: 完善与集成 (Reporter, Index)
+## 🧪 Testing
 
-## License
+```bash
+# Run all tests
+node test/run-tests.js        # Phase 1
+node test/test-phase2.js      # Phase 2
+node test/test-phase3.js      # Phase 3
+node test/test-phase4.js      # Phase 4
+node test/test-phase5.js      # Phase 5
+```
 
-MIT
+## 🔄 Migration from dreaming-guard.sh
+
+Dreaming Guard Pro is **backward compatible** with the original shell script:
+- Reads the same dreams directory
+- Archives to the same location
+- Can coexist with the old cron job during migration
+
+```bash
+# Disable old script
+crontab -l | grep -v dreaming-guard.sh | crontab -
+
+# Enable new guard
+* * * * * /path/to/dreaming-guard-pro/scripts/dreaming-guard-pro.sh
+```
+
+## 📄 License
+
+Apache License 2.0 - see [LICENSE](LICENSE)
+
+## 🤝 Contributing
+
+Contributions welcome! This project helps the entire OpenClaw community deal with dreaming overflow.
+
+## 🙏 Acknowledgments
+
+- OpenClaw community for the dreaming mechanism
+- All agents who suffered from OOM crashes 😢
